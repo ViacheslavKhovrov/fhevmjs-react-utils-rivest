@@ -21,6 +21,39 @@ const UINT_LIMITS = {
   uint64: { min: 0, max: BigInt("18446744073709551615") },
 };
 
+const CopyableInput = ({ value, onCopy }) => {
+  const [isCopied, setIsCopied] = useState(false);
+  const baseInputClass =
+    "w-full border border-[#1E3A8A] p-3 py-5 text-white font-mono focus:outline-none focus:border-[#1E3A8A] bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
+  const handleCopy = () => {
+    onCopy();
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex w-full">
+      <input
+        type="text"
+        value={value}
+        readOnly
+        className={`${baseInputClass} border-r-0 rounded-l`}
+      />
+      <button
+        onClick={handleCopy}
+        className="px-4 border border-[#1E3A8A] border-l-0 rounded-r hover:bg-white/5 transition-colors"
+      >
+        {isCopied ? (
+          <ClipboardCheck className="w-5 h-5 text-white/80" />
+        ) : (
+          <Copy className="w-5 h-5 text-white/80" />
+        )}
+      </button>
+    </div>
+  );
+};
+
 const Connected = () => {
   const { address } = useWallet();
   const [contractAddress, setContractAddress] = useState("");
@@ -32,6 +65,7 @@ const Connected = () => {
     uint16: 0,
     uint32: 0,
     uint64: 0,
+    address: ''
   });
   const [errors, setErrors] = useState({
     uint4: "",
@@ -39,6 +73,7 @@ const Connected = () => {
     uint16: "",
     uint32: "",
     uint64: "",
+    address: ""
   });
   const [proofs, setProofs] = useState({
     uint4: { proof: "0x0", handle: "0x0" },
@@ -46,6 +81,7 @@ const Connected = () => {
     uint16: { proof: "0x0", handle: "0x0" },
     uint32: { proof: "0x0", handle: "0x0" },
     uint64: { proof: "0x0", handle: "0x0" },
+    address: { proof: "0x0", handle: "0x0" }
   });
 
   useEffect(() => {
@@ -105,9 +141,26 @@ const Connected = () => {
     return true;
   };
 
+  const validateAddress = (address) => {
+    if (!address.match(/^0x[0-9a-fA-F]{40}$/)) {
+      setErrors((prev) => ({
+        ...prev,
+        address: "Invalid Ethereum address format",
+      }));
+      return false;
+    }
+    setErrors((prev) => ({ ...prev, address: "" }));
+    return true;
+  };
+
   const handleInputChange = async (type, value) => {
     try {
-      if (!validateAndSetValue(type, value)) {
+      if (type === 'address') {
+        if (!validateAddress(value)) {
+          setValues((prev) => ({ ...prev, [type]: value }));
+          return;
+        }
+      } else if (!validateAndSetValue(type, value)) {
         setValues((prev) => ({ ...prev, [type]: value }));
         return;
       }
@@ -119,25 +172,27 @@ const Connected = () => {
         address
       );
 
-      const numValue = Number(value);
-      switch (type) {
-        case "uint4":
-          await input.add4(numValue);
-          break;
-        case "uint8":
-          await input.add8(numValue);
-          break;
-        case "uint16":
-          await input.add16(numValue);
-          break;
-        case "uint32":
-          await input.add32(numValue);
-          break;
-        case "uint64":
-          await input.add64(numValue);
-          break;
-        default:
-          await input.add64(numValue);
+      if (type === 'address') {
+        await input.addAddress(value);
+      } else {
+        const numValue = Number(value);
+        switch (type) {
+          case "uint4":
+            await input.add4(numValue);
+            break;
+          case "uint8":
+            await input.add8(numValue);
+            break;
+          case "uint16":
+            await input.add16(numValue);
+            break;
+          case "uint32":
+            await input.add32(numValue);
+            break;
+          case "uint64":
+            await input.add64(numValue);
+            break;
+        }
       }
 
       const encryptedInput = await input.encrypt();
@@ -170,37 +225,6 @@ const Connected = () => {
     const { min, max } = UINT_LIMITS[type];
     const baseInputClass =
       "w-full border border-[#1E3A8A] p-3 py-5 text-white font-mono focus:outline-none focus:border-[#1E3A8A] bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
-
-    const CopyableInput = ({ value, onCopy }) => {
-      const [isCopied, setIsCopied] = useState(false);
-
-      const handleCopy = () => {
-        onCopy();
-        setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
-      };
-
-      return (
-        <div className="flex w-full">
-          <input
-            type="text"
-            value={value}
-            readOnly
-            className={`${baseInputClass} border-r-0 rounded-l`}
-          />
-          <button
-            onClick={handleCopy}
-            className="px-4 border border-[#1E3A8A] border-l-0 rounded-r hover:bg-white/5 transition-colors"
-          >
-            {isCopied ? (
-              <ClipboardCheck className="w-5 h-5 text-white/80" />
-            ) : (
-              <Copy className="w-5 h-5 text-white/80" />
-            )}
-          </button>
-        </div>
-      );
-    };
 
     return (
       <div className="grid place-items-center w-full">
@@ -259,6 +283,66 @@ const Connected = () => {
     );
   };
 
+  const renderAddressSection = () => {
+    const baseInputClass =
+      "w-full border border-[#1E3A8A] p-3 py-5 text-white font-mono focus:outline-none focus:border-[#1E3A8A] bg-transparent";
+
+    return (
+      <div className="grid place-items-center w-full">
+        <div className="flex flex-col w-full items-center gap-4 max-w-2xl">
+          <div className="flex flex-col w-full gap-2">
+            <div className="flex gap-4">
+              <div className="text-white/80 text-right font-mono w-40 md:flex hidden"></div>
+              {errors.address && (
+                <Alert variant="destructive" className="mt-2">
+                  <div className="flex gap-3 items-center">
+                    <AlertCircle className="h-4 w-4" />
+                    <div>{errors.address}</div>
+                  </div>
+                </Alert>
+              )}
+            </div>
+
+            <div className="flex items-center w-full gap-4">
+              <div className="text-white/80 md:text-right font-mono md:w-40 w-12">
+                address
+              </div>
+              <input
+                type="text"
+                value={values.address}
+                onChange={(e) => handleInputChange('address', e.target.value)}
+                className={`${baseInputClass} rounded ${
+                  errors.address ? "border-red-500" : ""
+                }`}
+                placeholder="0x..."
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center w-full gap-4">
+            <div className="text-white/80 md:text-right font-mono md:w-40 w-12">
+              Input Handle
+            </div>
+            <CopyableInput
+              value={proofs.address.handle}
+              onCopy={() => copyToClipboard(proofs.address.handle)}
+            />
+          </div>
+
+          <div className="flex items-center w-full gap-4">
+            <div className="text-white/80 md:text-right font-mono md:w-40 w-12">
+              Input Proof
+            </div>
+            <CopyableInput
+              value={proofs.address.proof}
+              onCopy={() => copyToClipboard(proofs.address.proof)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#020B20] flex flex-col">
       <Header address={address} onContractChange={handleContractChange} />
@@ -296,6 +380,7 @@ const Connected = () => {
                 {renderUintSection("uint16")}
                 {renderUintSection("uint32")}
                 {renderUintSection("uint64")}
+                {renderAddressSection()}
               </>
             )}
           </div>
